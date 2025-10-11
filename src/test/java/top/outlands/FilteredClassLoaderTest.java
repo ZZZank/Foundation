@@ -29,7 +29,7 @@ public class FilteredClassLoaderTest {
     }
 
     private static FilteredClassLoader createLoader() {
-        var loader = new FilteredClassLoader(Thread.currentThread().getContextClassLoader());
+        var loader = new FilteredClassLoader(Thread.currentThread().getContextClassLoader(), null);
         loader.exclude("net.minecraft.");
         return loader;
     }

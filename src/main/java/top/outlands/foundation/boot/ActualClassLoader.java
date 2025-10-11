@@ -1,8 +1,5 @@
 package top.outlands.foundation.boot;
 
-import net.lenni0451.reflect.Classes;
-import net.lenni0451.reflect.Fields;
-import net.lenni0451.reflect.Methods;
 import net.minecraft.launchwrapper.IClassTransformer;
 import net.minecraft.launchwrapper.Launch;
 import top.outlands.foundation.trie.PrefixTrie;
@@ -10,18 +7,12 @@ import top.outlands.foundation.trie.TrieNode;
 import zone.rong.imaginebreaker.ImagineBreaker;
 
 import java.io.*;
-import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
-import java.lang.invoke.MethodType;
-import java.lang.invoke.VarHandle;
-import java.lang.reflect.Field;
-import java.lang.reflect.Method;
 import java.net.*;
 import java.security.CodeSigner;
 import java.security.CodeSource;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.function.Consumer;
 import java.util.jar.Attributes;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
@@ -36,9 +27,6 @@ public class ActualClassLoader extends URLClassLoader {
     public static final int BUFFER_SIZE = 1 << 12;
     private final List<URL> sources;
     private final Set<String> jarNames = new HashSet<>();
-    private ClassLoader parent = getClass().getClassLoader();
-    public static final PrefixTrie<Boolean> classLoaderInclusions = new PrefixTrie<>();
-    public static final PrefixTrie<Boolean> classLoaderExceptions = new PrefixTrie<>();
     public static final PrefixTrie<Boolean> transformerExceptions = new PrefixTrie<>();
     private final Map<String, Class<?>> cachedClasses = new ConcurrentHashMap<>();
     private final Set<String> invalidClasses = new HashSet<>(1024);
@@ -64,44 +52,9 @@ public class ActualClassLoader extends URLClassLoader {
     }
 
     public ActualClassLoader(URL[] sources, ClassLoader loader) {
-        super(sources, loader);
-        if (parent != loader) {
-            parent = loader;
-        }
+        super(sources, new FilteredClassLoader(loader, LOGGER));
         this.sources = new ArrayList<>(Arrays.asList(sources));
-        addClassLoaderInclusion("org.objectweb.asm.");
-        addClassLoaderInclusion("org.spongepowered.asm.");
-        addClassLoaderInclusion("com.llamalad7.mixinextras.");
-        addClassLoaderInclusion("net.minecraft");
-        addClassLoaderInclusion("top.outlands.foundation.");
-        addClassLoaderInclusion("org.lwjgl");
-        addClassLoaderInclusion("com.cleanroommc.");
-        addClassLoaderInclusion("ibxm.");
-        addClassLoaderInclusion("paulscode.sound.codecs.");
-        addClassLoaderInclusion("zone.rong.mixinbooter.");
-        addClassLoaderInclusion("paulscode.sound.");
-        
-        addClassLoaderExclusion0("java.");
-        
-        addClassLoaderExclusion0("net.minecraft.launchwrapper.LaunchClassLoader");
-        addClassLoaderExclusion0("net.minecraft.launchwrapper.Launch");
-        addClassLoaderExclusion0("top.outlands.foundation.boot.");
-        addClassLoaderExclusion0("top.outlands.foundation.function.");
-        addClassLoaderExclusion0("top.outlands.foundation.trie.");
-        addClassLoaderExclusion0("net.minecraftforge.server.terminalconsole.");
-
-        addTransformerExclusion("org.spongepowered.asm.bridge.");
-        addTransformerExclusion("org.spongepowered.asm.lib.");
-        addTransformerExclusion("org.spongepowered.asm.launch.");
-        addTransformerExclusion("org.spongepowered.asm.logging.");
-        addTransformerExclusion("org.spongepowered.asm.mixin.");
-        addTransformerExclusion("org.spongepowered.asm.obfuscation.");
-        addTransformerExclusion("org.spongepowered.asm.service.");
-        addTransformerExclusion("org.spongepowered.asm.transformers.");
-        addTransformerExclusion("org.spongepowered.asm.util.");
-        addTransformerExclusion("org.spongepowered.include.com.google.");
-        addTransformerExclusion("org.spongepowered.tools.");
-        addTransformerExclusion("com.llamalad7.mixinextras.");
+        addParentLoadingRules((ClassLoadingRules) this.getParent());
         if (DUMP) {
             File dumpDir = new File(Launch.minecraftHome, "CLASS_DUMP");
 
@@ -120,6 +73,14 @@ public class ActualClassLoader extends URLClassLoader {
         }
     }
 
+    /**
+     * NOTE: the {@code rules} is from parent classloader, which means using {@link ClassLoadingRules#exclude(String)}
+     * will make parent loader deny matches classes, thus allowing this loader to load the class. The same inverse logic
+     * applies to {@link ClassLoadingRules#include(String)}
+     */
+    protected void addParentLoadingRules(ClassLoadingRules rules) {
+    }
+
     public static TransformerHolder getTransformerHolder() {
         return transformerHolder;
     }
@@ -133,10 +94,6 @@ public class ActualClassLoader extends URLClassLoader {
     public Class<?> findClass(final String name) throws ClassNotFoundException {
         if (invalidClasses.contains(name)) {
             throw new ClassNotFoundException("Found " + name + " in invalid classes.");
-        }
-        TrieNode<Boolean> node = classLoaderExceptions.getFirstKeyValueNode(name);
-        if (node != null && node.getValue()) {
-            return parent.loadClass(name);
         }
 
         if (cachedClasses.containsKey(name)) {
@@ -198,7 +155,7 @@ public class ActualClassLoader extends URLClassLoader {
                     }
                 }
             }
-            node = transformerExceptions.getFirstKeyValueNode(name);
+            var node = transformerExceptions.getFirstKeyValueNode(name);
             if (node != null && node.getValue()) {
                 try {
                     transformedClass = getClassBytes(name);
@@ -236,15 +193,6 @@ public class ActualClassLoader extends URLClassLoader {
             throw new ClassNotFoundException(name, e);
 
         }
-    }
-
-    @Override
-    public Class<?> loadClass(String name) throws ClassNotFoundException {
-        TrieNode<Boolean> node = classLoaderInclusions.getFirstKeyValueNode(name);
-        if (node != null && node.getValue()) {
-            return findClass(name);
-        }
-        return super.loadClass(name);
     }
 
     public void saveClassBytes(final byte[] data, final String transformedName) {
@@ -372,16 +320,6 @@ public class ActualClassLoader extends URLClassLoader {
             buffer = loadBuffer.get();
         }
         return buffer;
-    }
-
-    private void addClassLoaderExclusion0(String toExclude) {
-        LOGGER.debug("Adding classloader exclusion {}", toExclude);
-        classLoaderExceptions.put(toExclude, true);
-    }
-    
-    private void addClassLoaderInclusion(String toInclude) {
-        LOGGER.debug("Adding classloader inclusion {}", toInclude);
-        classLoaderInclusions.put(toInclude, true);
     }
 
     @Deprecated

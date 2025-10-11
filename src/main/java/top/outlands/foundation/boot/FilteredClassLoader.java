@@ -1,5 +1,6 @@
 package top.outlands.foundation.boot;
 
+import org.apache.logging.log4j.Logger;
 import top.outlands.foundation.trie.PrefixTrie;
 import zone.rong.imaginebreaker.ImagineBreaker;
 
@@ -25,13 +26,16 @@ public class FilteredClassLoader extends ClassLoader implements ClassLoadingRule
 
     private final PrefixTrie<Boolean> exclusions = new PrefixTrie<>();
     private final PrefixTrie<Boolean> inclusions = new PrefixTrie<>();
+    private final Logger logger;
 
-    public FilteredClassLoader(String name, ClassLoader parent) {
+    public FilteredClassLoader(String name, ClassLoader parent, Logger logger) {
         super(name, parent);
+        this.logger = logger;
     }
 
-    public FilteredClassLoader(ClassLoader parent) {
+    public FilteredClassLoader(ClassLoader parent, Logger logger) {
         super(parent);
+        this.logger = logger;
     }
 
     @Override
@@ -53,6 +57,15 @@ public class FilteredClassLoader extends ClassLoader implements ClassLoadingRule
     }
 
     @Override
+    public Class<?> loadClass(String name) throws ClassNotFoundException {
+        if (exclusions.getFirstKeyValueNode(name) != null && inclusions.getFirstKeyValueNode(name) == null) {
+            // excluded and not explicitly included again
+            throw FALL_THROUGH;
+        }
+        return this.getParent().loadClass(name);
+    }
+
+    @Override
     public PrefixTrie<Boolean> getExclusions() {
         return exclusions;
     }
@@ -60,5 +73,21 @@ public class FilteredClassLoader extends ClassLoader implements ClassLoadingRule
     @Override
     public PrefixTrie<Boolean> getInclusions() {
         return inclusions;
+    }
+
+    @Override
+    public boolean exclude(String prefix) {
+        if (logger != null) {
+            logger.debug("Excluding classes from being loaded by parent classloader: {}", prefix);
+        }
+        return ClassLoadingRules.super.exclude(prefix);
+    }
+
+    @Override
+    public boolean include(String prefix) {
+        if (logger != null) {
+            logger.debug("Including classes to be loaded by parent classloader: {}", prefix);
+        }
+        return ClassLoadingRules.super.include(prefix);
     }
 }
