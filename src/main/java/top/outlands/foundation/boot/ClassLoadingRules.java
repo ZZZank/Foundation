@@ -7,9 +7,11 @@ import top.outlands.foundation.trie.PrefixTrie;
  */
 public interface ClassLoadingRules {
 
+    ClassLoader target();
+
     /**
      * if class names matches any of the exclusions defined here, and matches none of the inclusions defined in
-     * {@link #getInclusions()}, it will not be loaded by this classloader
+     * {@link #getInclusions()}, it will not be loaded by {@link #target()}
      *
      * @see #exclude(String)
      */
@@ -17,7 +19,7 @@ public interface ClassLoadingRules {
 
     /**
      * if class names matches any of the exclusions defined in {@link #getExclusions()}, and matches none of the
-     * inclusions defined here, it will not be loaded by this classloader
+     * inclusions defined here, it will not be loaded by {@link #target()}
      *
      * @see #include(String)
      */

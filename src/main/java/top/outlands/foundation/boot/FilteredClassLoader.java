@@ -11,7 +11,7 @@ import java.lang.invoke.MethodType;
 /**
  * @author ZZZank
  */
-public class FilteredClassLoader extends ClassLoader implements ClassLoadingRules {
+public final class FilteredClassLoader extends ClassLoader implements ClassLoadingRules {
     public static final ClassNotFoundException FALL_THROUGH = new ClassNotFoundException("Class denied by FilteredClassLoader filters, falling through");
     private static final MethodHandle H_LOAD_CLASS;
 
@@ -63,6 +63,11 @@ public class FilteredClassLoader extends ClassLoader implements ClassLoadingRule
             throw FALL_THROUGH;
         }
         return this.getParent().loadClass(name);
+    }
+
+    @Override
+    public ClassLoader target() {
+        return this.getParent();
     }
 
     @Override
