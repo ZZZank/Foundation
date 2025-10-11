@@ -1,7 +1,7 @@
 package net.minecraft.launchwrapper;
 
 import top.outlands.foundation.boot.ActualClassLoader;
-import top.outlands.foundation.boot.Foundation;
+import top.outlands.foundation.boot.ClassLoadingRules;
 
 import java.io.File;
 import java.lang.invoke.MethodHandles;
@@ -46,6 +46,30 @@ public class LaunchClassLoader extends ActualClassLoader {
             throw new RuntimeException(e);
         }
         return urls.toArray(new URL[0]);
+    }
+
+    protected void addParentLoadingRules(ClassLoadingRules rules) {
+        rules.exclude("org.objectweb.asm.");
+        rules.exclude("org.spongepowered.asm.");
+        rules.exclude("com.llamalad7.mixinextras.");
+        rules.exclude("net.minecraft.");
+        rules.exclude("top.outlands.foundation.");
+        rules.exclude("org.lwjgl.");
+        rules.exclude("com.cleanroommc.");
+        rules.exclude("ibxm.");
+        rules.exclude("paulscode.sound.codecs.");
+        rules.exclude("zone.rong.mixinbooter.");
+        rules.exclude("paulscode.sound.");
+
+        rules.include("net.minecraft.launchwrapper.LaunchClassLoader");
+        rules.include("net.minecraft.launchwrapper.Launch");
+        rules.include("top.outlands.foundation.boot.");
+        rules.include("top.outlands.foundation.function.");
+        rules.include("top.outlands.foundation.trie.");
+        rules.include("net.minecraftforge.server.terminalconsole.");
+
+        addTransformerExclusion("org.spongepowered.asm.");
+        addTransformerExclusion("com.llamalad7.mixinextras.");
     }
 
     /**
